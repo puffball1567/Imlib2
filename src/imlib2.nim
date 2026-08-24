@@ -1,5 +1,23 @@
-import x11 / [x, xlib]
+when not defined(X_DISPLAY_MISSING):
+  import x11 / [x, xlib]
 {.passL: "`pkg-config imlib2 --libs`".}
+
+const
+  IMLIB2_VERSION_MAJOR* = 1
+  IMLIB2_VERSION_MINOR* = 12
+  IMLIB2_VERSION_MICRO* = 6
+  IMLIB2_VERSION* =
+    10000 * IMLIB2_VERSION_MAJOR + 100 * IMLIB2_VERSION_MINOR +
+      IMLIB2_VERSION_MICRO
+  IMLIB_ERR_INTERNAL* = -1
+  IMLIB_ERR_NO_LOADER* = -2
+  IMLIB_ERR_NO_SAVER* = -3
+  IMLIB_ERR_BAD_IMAGE* = -4
+  IMLIB_ERR_BAD_FRAME* = -5
+  IMLIB_IMAGE_ANIMATED* = 1 shl 0
+  IMLIB_FRAME_BLEND* = 1 shl 1
+  IMLIB_FRAME_DISPOSE_CLEAR* = 1 shl 2
+  IMLIB_FRAME_DISPOSE_PREV* = 1 shl 3
 
 type
   DATA64* = culonglong
@@ -39,7 +57,8 @@ type
     IMLIB_LOAD_ERROR_TOO_MANY_SYMBOLIC_LINKS, IMLIB_LOAD_ERROR_OUT_OF_MEMORY,
     IMLIB_LOAD_ERROR_OUT_OF_FILE_DESCRIPTORS,
     IMLIB_LOAD_ERROR_PERMISSION_DENIED_TO_WRITE,
-    IMLIB_LOAD_ERROR_OUT_OF_DISK_SPACE, IMLIB_LOAD_ERROR_UNKNOWN
+    IMLIB_LOAD_ERROR_OUT_OF_DISK_SPACE, IMLIB_LOAD_ERROR_UNKNOWN,
+    IMLIB_LOAD_ERROR_IMAGE_READ, IMLIB_LOAD_ERROR_IMAGE_FRAME
 
   ##  Encodings known to Imlib2 (so far)
 
@@ -60,19 +79,36 @@ type
     green*: cint
     blue*: cint
 
+  Imlib_Frame_Info* {.bycopy.} = object
+    frame_count*: cint
+    frame_num*: cint
+    canvas_w*: cint
+    canvas_h*: cint
+    frame_x*: cint
+    frame_y*: cint
+    frame_w*: cint
+    frame_h*: cint
+    frame_flags*: cint
+    frame_delay*: cint
+    loop_count*: cint
+
 
 ##  Progressive loading callbacks
 
 type
-  Imlib_Progress_Function* = proc (im: Imlib_Image; percent: uint8; update_x: cint;
-                                update_y: cint; update_w: cint; update_h: cint): cint
-  Imlib_Data_Destructor_Function* = proc (im: Imlib_Image; data: pointer)
+  Imlib_Progress_Function* = proc (im: Imlib_Image; percent: cchar;
+      update_x: cint; update_y: cint; update_w: cint; update_h: cint): cint {.cdecl.}
+  Imlib_Data_Destructor_Function* = proc (im: Imlib_Image;
+      data: pointer) {.cdecl.}
+  Imlib_Image_Data_Memory_Function* = proc (data: pointer;
+      size: csize_t): pointer {.cdecl.}
 
 ##  *INDENT-OFF*
 
 ##  *INDENT-ON*
 ##  context handling
 
+proc imlib_version*(): cint {.importc, cdecl.}
 proc imlib_context_new*(): Imlib_Context {.importc, cdecl.}
 proc imlib_context_free*(context: Imlib_Context) {.importc, cdecl.}
 proc imlib_context_push*(context: Imlib_Context) {.importc, cdecl.}
@@ -103,6 +139,8 @@ proc imlib_context_set_color_hlsa*(hue: cfloat; lightness: cfloat;
                                   saturation: cfloat; alpha: cint) {.importc, cdecl.}
 proc imlib_context_set_color_cmya*(cyan: cint; magenta: cint; yellow: cint; alpha: cint) {.importc, cdecl.}
 proc imlib_context_set_color_range*(color_range: Imlib_Color_Range) {.importc, cdecl.}
+proc imlib_context_set_image_data_memory_function*(
+    memory_function: Imlib_Image_Data_Memory_Function) {.importc, cdecl.}
 proc imlib_context_set_progress_function*(
     progress_function: Imlib_Progress_Function) {.importc, cdecl.}
 proc imlib_context_set_progress_granularity*(progress_granularity: uint8) {.importc, cdecl.}
@@ -137,6 +175,8 @@ proc imlib_context_get_color_cmya*(cyan: ptr cint; magenta: ptr cint; yellow: pt
                                   alpha: ptr cint) {.importc, cdecl.}
 proc imlib_context_get_imlib_color*(): ptr Imlib_Color {.importc, cdecl.}
 proc imlib_context_get_color_range*(): Imlib_Color_Range {.importc, cdecl.}
+proc imlib_context_get_image_data_memory_function*():
+    Imlib_Image_Data_Memory_Function {.importc, cdecl.}
 proc imlib_context_get_progress_function*(): Imlib_Progress_Function {.importc, cdecl.}
 proc imlib_context_get_progress_granularity*(): uint8 {.importc, cdecl.}
 proc imlib_context_get_image*(): Imlib_Image {.importc, cdecl.}
@@ -148,6 +188,7 @@ proc imlib_set_cache_size*(bytes: cint) {.importc, cdecl.}
 proc imlib_get_color_usage*(): cint {.importc, cdecl.}
 proc imlib_set_color_usage*(max: cint) {.importc, cdecl.}
 proc imlib_flush_loaders*() {.importc, cdecl.}
+proc imlib_get_error*(): cint {.importc, cdecl.}
 when not defined(X_DISPLAY_MISSING):
   proc imlib_get_visual_depth*(display: ptr Display; visual: ptr Visual): cint {.importc, cdecl.}
   proc imlib_get_best_visual*(display: ptr Display; screen: cint;
@@ -158,8 +199,14 @@ proc imlib_load_image_without_cache*(file: cstring): Imlib_Image {.importc, cdec
 proc imlib_load_image_immediately_without_cache*(file: cstring): Imlib_Image {.importc, cdecl.}
 proc imlib_load_image_with_error_return*(file: cstring;
                                         error_return: ptr Imlib_Load_Error): Imlib_Image {.importc, cdecl.}
+proc imlib_load_image_with_errno_return*(file: cstring;
+                                        error_return: ptr cint): Imlib_Image {.importc, cdecl.}
+proc imlib_load_image_fd*(fd: cint; file: cstring): Imlib_Image {.importc, cdecl.}
+proc imlib_load_image_mem*(file: cstring; data: pointer;
+                          size: csize_t): Imlib_Image {.importc, cdecl.}
 proc imlib_free_image*() {.importc, cdecl.}
 proc imlib_free_image_and_decache*() {.importc, cdecl.}
+proc imlib_image_decache_file*(file: cstring): cint {.importc, cdecl.}
 ##  query/modify image parameters
 
 proc imlib_image_get_width*(): cint {.importc, cdecl.}
@@ -211,6 +258,9 @@ proc imlib_blend_image_onto_image*(source_image: Imlib_Image; merge_alpha: uint8
 
 proc imlib_create_image*(width: cint; height: cint): Imlib_Image {.importc, cdecl.}
 proc imlib_create_image_using_data*(width: cint; height: cint; data: ptr DATA32): Imlib_Image {.importc, cdecl.}
+proc imlib_create_image_using_data_and_memory_function*(width: cint;
+    height: cint; data: ptr DATA32;
+    memory_function: Imlib_Image_Data_Memory_Function): Imlib_Image {.importc, cdecl.}
 proc imlib_create_image_using_copied_data*(width: cint; height: cint;
     data: ptr DATA32): Imlib_Image {.importc, cdecl.}
 when not defined(X_DISPLAY_MISSING):
@@ -374,6 +424,9 @@ proc imlib_image_remove_and_free_attached_data_value*(key: cstring) {.importc, c
 proc imlib_save_image*(filename: cstring) {.importc, cdecl.}
 proc imlib_save_image_with_error_return*(filename: cstring;
                                         error_return: ptr Imlib_Load_Error) {.importc, cdecl.}
+proc imlib_save_image_with_errno_return*(filename: cstring;
+                                        error_return: ptr cint) {.importc, cdecl.}
+proc imlib_save_image_fd*(fd: cint; filename: cstring) {.importc, cdecl.}
 ##  FIXME:
 ##  need to add arbitrary rotation routines
 ##  rotation/skewing
@@ -415,6 +468,14 @@ proc imlib_filter_divisors*(a: cint; r: cint; g: cint; b: cint) {.importc, cdecl
 proc imlib_apply_filter*(script: cstring) {.varargs, importc, cdecl.}
 proc imlib_image_clear*() {.importc, cdecl.}
 proc imlib_image_clear_color*(r: cint; g: cint; b: cint; a: cint) {.importc, cdecl.}
+
+##  multiframe image loading and errors
+
+proc imlib_load_image_frame*(file: cstring; frame: cint): Imlib_Image {.importc, cdecl.}
+proc imlib_load_image_frame_mem*(file: cstring; frame: cint; data: pointer;
+                                size: csize_t): Imlib_Image {.importc, cdecl.}
+proc imlib_image_get_frame_info*(info: ptr Imlib_Frame_Info) {.importc, cdecl.}
+proc imlib_strerror*(error: cint): cstring {.importc, cdecl.}
 ##  *INDENT-OFF*
 
 ##  *INDENT-ON*
