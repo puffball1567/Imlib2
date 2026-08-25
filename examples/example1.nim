@@ -62,8 +62,7 @@ discard XMapWindow(disp, win)
 imlib_set_cache_size(2048 * 1024)
 # set the font cache to 512Kb - again to avoid re-loading
 imlib_set_font_cache_size(512 * 1024)
-# add the ./ttfonts dir to our font path - you'll want a notepad.ttf
-# in that dir for the text to display
+# Add the bundled Abel font directory to the font path.
 imlib_add_path_to_font_path("./ttfonts")
 # set the maximum number of colors to allocate for 8bpp and less to 128
 imlib_set_color_usage(128)
@@ -114,7 +113,7 @@ while true:
       updates = imlib_update_append_rect(updates,
                                          mouse_x - (w div 2), mouse_y - (h div 2),
                                          w, h)
-      font = imlib_load_font("notepad/30")
+      font = imlib_load_font("Abel-Regular/30")
       if (font != nil):
         #var text: array[char, 4096]
         imlib_context_set_font(font)
@@ -131,7 +130,7 @@ while true:
       updates = imlib_update_append_rect(updates,
                                          mouse_x - (w div 2), mouse_y - (h div 2),
                                          w, h)
-      font = imlib_load_font("notepad/30")
+      font = imlib_load_font("Abel-Regular/30")
       if (font != nil):
         imlib_context_set_font(font);
         #sprintf(text, "Mouse is at %i, %i", mouse_x, mouse_y);
@@ -215,7 +214,7 @@ while true:
     imlib_free_color_range()
 
     # draw text - centered with the current mouse x, y
-    font = imlib_load_font("notepad/30")
+    font = imlib_load_font("Abel-Regular/30")
     if font != nil:
       # set the current font
       imlib_context_set_font(font);

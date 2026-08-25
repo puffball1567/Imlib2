@@ -57,3 +57,12 @@ Run the test with:
 ```sh
 nimble test
 ```
+
+## Example font
+
+The interactive example includes an unmodified copy of Abel Regular from
+[Google Fonts](https://github.com/google/fonts/tree/main/ofl/abel). The font is
+distributed under the SIL Open Font License 1.1, separately from the MIT
+license declared for this Nim package. Its copyright, exact source revision,
+checksum, and license text are recorded in
+[`examples/ttfonts`](examples/ttfonts/README.md).
